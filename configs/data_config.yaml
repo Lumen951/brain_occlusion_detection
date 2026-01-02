@@ -1,0 +1,24 @@
+# Data Configuration
+
+# Dataset root path (modify this to your E drive path)
+dataset_root: "E:/datasets/brain_occlusion"
+
+# Data splits
+train_split: "train"
+val_split: "val"
+test_split: "test"
+
+# File patterns
+image_suffix: "_brain.nii.gz"
+label_suffix: "_label.nii.gz"
+metadata_file: "participants.tsv"
+
+# Data loading settings
+num_workers: 4
+prefetch_factor: 2
+pin_memory: true
+
+# Cache settings
+use_cache: true
+cache_dir: "./cache"
+cache_rate: 0.5  # Cache 50% of data in memory (adjust based on RAM)

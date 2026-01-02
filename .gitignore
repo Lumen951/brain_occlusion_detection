@@ -1,0 +1,71 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+env/
+
+# uv
+.uv/
+uv.lock
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# TensorBoard
+runs/
+logs/
+tensorboard_logs/
+
+# Experiments
+experiments/*/checkpoints/*.pth
+experiments/*/checkpoints/*.pt
+experiments/*/logs/
+
+# Data and Cache
+cache/
+preprocessed_cache/
+*.nii
+*.nii.gz
+*.tsv
+data/raw/
+data/processed/
+
+# Models
+*.pth
+*.pt
+*.ckpt
+external_models/*/
+!external_models/README.md
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Pytest
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Misc
+*.log
+.env

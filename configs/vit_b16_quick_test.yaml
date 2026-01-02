@@ -1,0 +1,67 @@
+# ViT-B/16 Quick Test Configuration (5 epochs)
+# Quick validation before full training
+
+experiment:
+  name: "vit_b16_quick_test"
+  description: "5-epoch quick validation for ViT-B/16"
+  phase: "phase1_baseline"
+
+# Dataset Configuration (same as full training)
+dataset:
+  root: "E:/Dataset/ds005226"
+
+  train_subjects: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50]
+  val_subjects: [51, 52, 53, 54, 55, 56, 57, 58]
+  test_subjects: [59, 60, 61, 62, 63, 64, 65]
+
+  image_size: 224
+  batch_size: 16      # For RTX 4060 8GB
+  num_workers: 4
+  occlusion_levels: null
+
+# Model Configuration (same as full training)
+model:
+  type: "vit_b16"
+  num_classes: 2
+  pretrained: true
+  freeze_backbone: false
+  drop_rate: 0.0
+  drop_path_rate: 0.1
+
+# Training Configuration - QUICK TEST VERSION
+training:
+  epochs: 5  # ⚠️ Only 5 epochs for quick validation
+
+  optimizer:
+    type: "adamw"
+    lr: 1.0e-4
+    weight_decay: 0.05
+    betas: [0.9, 0.999]
+
+  scheduler:
+    type: "cosine"
+    warmup_epochs: 2  # Shorter warmup for quick test
+    min_lr: 1.0e-6
+
+  loss: "cross_entropy"
+
+  use_amp: true
+  grad_clip: 1.0
+
+  early_stopping:
+    enabled: false  # Disable for quick test
+
+  checkpoint:
+    save_dir: "experiments/vit_b16/quick_test/checkpoints"
+    save_best: true
+    save_last: true
+    save_frequency: 2  # Save every 2 epochs
+
+# Logging Configuration
+logging:
+  use_tensorboard: true
+  log_dir: "experiments/vit_b16/quick_test/logs"
+  print_freq: 10
+
+# Reproducibility
+seed: 42

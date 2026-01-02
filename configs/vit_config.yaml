@@ -1,0 +1,182 @@
+# Dataset Configuration for Occluded Aircraft Classification
+dataset:
+  # Path to the BIDS dataset root
+  root: "E:/Dataset/ds005226"
+
+  # Image size (ViT typically uses 224x224)
+  image_size: 224
+
+  # Subject split (total 65 subjects: sub-01 to sub-65)
+  # Adjust these based on your split strategy
+  train_subjects:
+    - "01"
+    - "02"
+    - "03"
+    - "04"
+    - "05"
+    - "06"
+    - "07"
+    - "08"
+    - "09"
+    - "10"
+    - "11"
+    - "12"
+    - "13"
+    - "14"
+    - "15"
+    - "16"
+    - "17"
+    - "18"
+    - "19"
+    - "20"
+    - "21"
+    - "22"
+    - "23"
+    - "24"
+    - "25"
+    - "26"
+    - "27"
+    - "28"
+    - "29"
+    - "30"
+    - "31"
+    - "32"
+    - "33"
+    - "34"
+    - "35"
+    - "36"
+    - "37"
+    - "38"
+    - "39"
+    - "40"
+    - "41"
+    - "42"
+    - "43"
+    - "44"
+    - "45"
+    - "46"
+    - "47"
+    - "48"
+    - "49"
+    - "50"  # 50 subjects for training (~77%)
+
+  val_subjects:
+    - "51"
+    - "52"
+    - "53"
+    - "54"
+    - "55"
+    - "56"
+    - "57"
+    - "58"  # 8 subjects for validation (~12%)
+
+  test_subjects:
+    - "59"
+    - "60"
+    - "61"
+    - "62"
+    - "63"
+    - "64"
+    - "65"  # 7 subjects for testing (~11%)
+
+  # Occlusion levels to include (null = all levels)
+  # Options: [0.1, 0.7, 0.9] or null for all
+  occlusion_levels: null  # Use all occlusion levels
+
+  # DataLoader settings
+  batch_size: 32
+  num_workers: 4
+  pin_memory: true
+
+# Model Configuration
+model:
+  # Model size: "tiny", "small", "base", or "large"
+  # Recommendations:
+  #   - tiny: Fast training, good for initial experiments (2M params)
+  #   - small: Balanced performance (22M params)
+  #   - base: Standard ViT, best accuracy (86M params)
+  #   - large: Highest accuracy, slower training (304M params)
+  size: "small"
+
+  # Number of classes (2 for binary classification)
+  num_classes: 2
+
+  # Custom model parameters (override defaults)
+  # Uncomment to customize:
+  # image_size: 224
+  # patch_size: 16
+  # dim: 384
+  # depth: 12
+  # heads: 6
+  # mlp_dim: 1536
+  # dropout: 0.1
+  # emb_dropout: 0.1
+
+# Training Configuration
+training:
+  # Number of epochs
+  epochs: 100
+
+  # Optimizer
+  optimizer:
+    type: "adamw"  # "adam", "adamw", or "sgd"
+    lr: 3.0e-4  # Learning rate (typical for ViT: 1e-4 to 3e-4)
+    weight_decay: 0.05  # Weight decay for AdamW
+    betas: [0.9, 0.999]  # Beta parameters for Adam/AdamW
+
+  # Learning rate scheduler
+  scheduler:
+    type: "cosine"  # "cosine", "step", or "none"
+    warmup_epochs: 5  # Number of warmup epochs
+    min_lr: 1.0e-6  # Minimum learning rate for cosine annealing
+
+  # Loss function
+  loss: "cross_entropy"  # "cross_entropy" or "focal_loss"
+
+  # Early stopping
+  early_stopping:
+    enabled: true
+    patience: 15  # Number of epochs to wait for improvement
+    min_delta: 0.001  # Minimum change to qualify as improvement
+
+  # Gradient clipping
+  grad_clip: 1.0  # Max gradient norm (0 to disable)
+
+  # Mixed precision training (faster on modern GPUs)
+  use_amp: true
+
+  # Model checkpointing
+  checkpoint:
+    save_dir: "experiments/checkpoints"
+    save_best: true  # Save best model based on validation accuracy
+    save_last: true  # Save last checkpoint
+    save_frequency: 10  # Save every N epochs
+
+# Evaluation Configuration
+evaluation:
+  # Metrics to compute
+  metrics:
+    - "accuracy"
+    - "precision"
+    - "recall"
+    - "f1"
+    - "confusion_matrix"
+
+  # Evaluate by occlusion level
+  stratify_by_occlusion: true
+
+# Logging Configuration
+logging:
+  # TensorBoard logging
+  use_tensorboard: true
+  log_dir: "experiments/logs"
+
+  # Print frequency
+  print_freq: 50  # Print every N batches
+
+  # Save predictions
+  save_predictions: true
+  predictions_dir: "experiments/predictions"
+
+# Random seed for reproducibility
+seed: 42

@@ -1,0 +1,43 @@
+# Training Configuration
+
+# Training settings
+num_epochs: 100
+batch_size: 2  # Small batch for 8GB VRAM
+gradient_accumulation_steps: 4  # Effective batch size = 2 * 4 = 8
+mixed_precision: true  # Use AMP for memory efficiency
+
+# Validation
+val_interval: 1  # Validate every N epochs
+save_interval: 5  # Save checkpoint every N epochs
+
+# Patch-based training
+patch_size: [96, 96, 96]  # Adjust based on image size and GPU memory
+samples_per_image: 4  # Number of patches to sample per image
+
+# Data augmentation
+augmentation:
+  use_augmentation: true
+  random_flip_prob: 0.5
+  random_rotate_range: [0.1, 0.1, 0.1]
+  random_zoom_range: [0.9, 1.1]
+  random_intensity_shift: 0.1
+  random_intensity_scale: 0.1
+
+# Preprocessing
+preprocessing:
+  spacing: [1.5, 1.5, 2.0]  # Target voxel spacing (mm)
+  intensity_min: -175  # HU window for CT (adjust for your modality)
+  intensity_max: 250
+  normalize_to: [0.0, 1.0]
+
+# Checkpoint
+checkpoint_dir: "./experiments"
+experiment_name: "exp_001"
+resume_from: null  # Path to checkpoint to resume from
+
+# TensorBoard
+tensorboard_log_dir: "./runs"
+log_interval: 10  # Log every N batches
+
+# Random seed
+seed: 42
