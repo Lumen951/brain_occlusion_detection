@@ -18,25 +18,26 @@ dataset:
   num_workers: 4
 
 # Model Configuration - ResNet-50
+# Experiment: Freeze backbone to prevent overfitting on small dataset
 model:
   type: "resnet50"
   num_classes: 2
   pretrained: true        # Use ImageNet pretrained weights
-  freeze_backbone: false  # Finetune entire network
+  freeze_backbone: true   # ← CHANGED: Only train final FC layer (25.6M → 0.002M params)
 
-# Training Configuration - Full 50 epochs (same as ViT)
+# Training Configuration - Enhanced regularization
 training:
   epochs: 50
 
   optimizer:
     type: "adamw"
-    lr: 1.0e-4          # Same as ViT for fair comparison
-    weight_decay: 0.05
+    lr: 3.0e-5          # ← REDUCED: From 1e-4 to 3e-5 (slower, more stable)
+    weight_decay: 0.2   # ← INCREASED: From 0.05 to 0.2 (stronger L2 regularization)
     betas: [0.9, 0.999]
 
   scheduler:
     type: "cosine"
-    warmup_epochs: 5    # Same as ViT
+    warmup_epochs: 5
     min_lr: 1.0e-6
 
   loss: "cross_entropy"
@@ -46,7 +47,7 @@ training:
 
   early_stopping:
     enabled: true
-    patience: 15
+    patience: 10        # ← REDUCED: From 15 to 10 (stop earlier if not improving)
     min_delta: 0.001
 
   checkpoint:
