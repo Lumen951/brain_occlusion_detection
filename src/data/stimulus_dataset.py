@@ -70,7 +70,16 @@ class OccludedAircraftDataset(Dataset):
                 for _, row in df.iterrows():
                     stim_file = row['stim_file']
                     label = int(row['stim_lable'])  # Note: dataset has typo "lable"
-                    occlusion = float(row['levelOfOcclusion'])
+
+                    # Extract occlusion level from filename (e.g., "Aircraft1_70%_2.jpg" -> 0.7)
+                    # TSV has 0.75 but filename has 70%, so we use filename as ground truth
+                    import re
+                    match = re.search(r'_(\d+)%_', stim_file)
+                    if match:
+                        occlusion = int(match.group(1)) / 100.0
+                    else:
+                        # Fallback to TSV value if filename parsing fails
+                        occlusion = float(row['levelOfOcclusion'])
 
                     # Filter by occlusion level if specified
                     if self.occlusion_levels is not None:
@@ -120,6 +129,7 @@ class OccludedAircraftDataset(Dataset):
             'occlusion_level': sample['occlusion_level'],
             'subject_id': sample['subject_id'],
             'stimulus_file': sample['stimulus_file'],
+            'image_path': sample['image_path'],  # For visualization tools
         }
 
         return image, label, metadata

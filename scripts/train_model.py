@@ -14,6 +14,7 @@ from tqdm import tqdm
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support, confusion_matrix
 
 from src.data.stimulus_dataset import create_dataloaders
+from src.data.image_dataset import create_image_split_dataloaders
 from src.models.vit_model import (
     create_vit_tiny,
     create_vit_small,
@@ -68,6 +69,17 @@ class Trainer:
         self.best_val_acc = 0.0
         self.early_stop_counter = 0
 
+        # Training history tracking
+        self.history = {
+            'epoch': [],
+            'train_loss': [],
+            'train_acc': [],
+            'val_loss': [],
+            'val_acc': [],
+            'val_f1': [],
+            'learning_rate': []
+        }
+
         # Setup AMP
         self.use_amp = self.config['training'].get('use_amp', False)
         self.scaler = torch.cuda.amp.GradScaler() if self.use_amp else None
@@ -84,16 +96,32 @@ class Trainer:
     def _create_dataloaders(self) -> Dict[str, torch.utils.data.DataLoader]:
         """Create train/val/test dataloaders."""
         dataset_config = self.config['dataset']
-        return create_dataloaders(
-            dataset_root=dataset_config['root'],
-            train_subjects=dataset_config['train_subjects'],
-            val_subjects=dataset_config['val_subjects'],
-            test_subjects=dataset_config.get('test_subjects'),
-            batch_size=dataset_config['batch_size'],
-            img_size=dataset_config['image_size'],
-            num_workers=dataset_config['num_workers'],
-            occlusion_levels=dataset_config.get('occlusion_levels'),
-        )
+        dataset_type = dataset_config.get('type', 'subject_split')
+
+        if dataset_type == 'image_split':
+            # New mode: load from data/train, data/val, data/test
+            print("Using image-based split mode")
+            return create_image_split_dataloaders(
+                train_dir=dataset_config['train_dir'],
+                val_dir=dataset_config['val_dir'],
+                test_dir=dataset_config.get('test_dir'),
+                batch_size=dataset_config['batch_size'],
+                img_size=dataset_config['image_size'],
+                num_workers=dataset_config['num_workers'],
+            )
+        else:
+            # Original mode: load by subject IDs
+            print("Using subject-based split mode")
+            return create_dataloaders(
+                dataset_root=dataset_config['root'],
+                train_subjects=dataset_config['train_subjects'],
+                val_subjects=dataset_config['val_subjects'],
+                test_subjects=dataset_config.get('test_subjects'),
+                batch_size=dataset_config['batch_size'],
+                img_size=dataset_config['image_size'],
+                num_workers=dataset_config['num_workers'],
+                occlusion_levels=dataset_config.get('occlusion_levels'),
+            )
 
     def _create_model(self) -> nn.Module:
         """Create model (either pretrained from timm or custom ViT)."""
@@ -345,6 +373,79 @@ class Trainer:
             epoch_path = save_dir / f'checkpoint_epoch_{self.current_epoch}.pth'
             torch.save(checkpoint, epoch_path)
 
+    def _plot_training_history(self):
+        """Plot training history and save to file."""
+        import matplotlib.pyplot as plt
+        import pandas as pd
+
+        if len(self.history['epoch']) == 0:
+            print("No training history to plot")
+            return
+
+        # Determine save directory
+        checkpoint_config = self.config['training']['checkpoint']
+        save_dir = Path(checkpoint_config['save_dir']).parent  # Go up one level from checkpoints/
+        save_dir.mkdir(parents=True, exist_ok=True)
+
+        # Create figure with 4 subplots
+        fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+        fig.suptitle(f"Training History - {self.config['experiment']['name']}", fontsize=16)
+
+        epochs = self.history['epoch']
+
+        # Plot 1: Loss
+        ax = axes[0, 0]
+        ax.plot(epochs, self.history['train_loss'], 'b-', label='Train Loss', linewidth=2)
+        ax.plot(epochs, self.history['val_loss'], 'r-', label='Val Loss', linewidth=2)
+        ax.set_xlabel('Epoch')
+        ax.set_ylabel('Loss')
+        ax.set_title('Training and Validation Loss')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+
+        # Plot 2: Accuracy
+        ax = axes[0, 1]
+        ax.plot(epochs, self.history['train_acc'], 'b-', label='Train Acc', linewidth=2)
+        ax.plot(epochs, self.history['val_acc'], 'r-', label='Val Acc', linewidth=2)
+        ax.set_xlabel('Epoch')
+        ax.set_ylabel('Accuracy')
+        ax.set_title('Training and Validation Accuracy')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+
+        # Plot 3: F1 Score
+        ax = axes[1, 0]
+        ax.plot(epochs, self.history['val_f1'], 'g-', label='Val F1', linewidth=2)
+        ax.set_xlabel('Epoch')
+        ax.set_ylabel('F1 Score')
+        ax.set_title('Validation F1 Score')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+
+        # Plot 4: Learning Rate
+        ax = axes[1, 1]
+        ax.plot(epochs, self.history['learning_rate'], 'purple', label='Learning Rate', linewidth=2)
+        ax.set_xlabel('Epoch')
+        ax.set_ylabel('Learning Rate')
+        ax.set_title('Learning Rate Schedule')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        ax.set_yscale('log')
+
+        plt.tight_layout()
+
+        # Save figure
+        plot_path = save_dir / 'training_history.png'
+        plt.savefig(plot_path, dpi=150, bbox_inches='tight')
+        print(f"Saved training history plot to {plot_path}")
+        plt.close()
+
+        # Save CSV
+        df = pd.DataFrame(self.history)
+        csv_path = save_dir / 'training_history.csv'
+        df.to_csv(csv_path, index=False)
+        print(f"Saved training history CSV to {csv_path}")
+
     def train(self):
         """Main training loop."""
         epochs = self.config['training']['epochs']
@@ -373,6 +474,15 @@ class Trainer:
                 self.writer.add_scalar('Val/F1', val_metrics['f1'], epoch)
                 self.writer.add_scalar('LR', self.optimizer.param_groups[0]['lr'], epoch)
 
+            # Record history
+            self.history['epoch'].append(self.current_epoch)
+            self.history['train_loss'].append(train_metrics['loss'])
+            self.history['train_acc'].append(train_metrics['accuracy'])
+            self.history['val_loss'].append(val_metrics['loss'])
+            self.history['val_acc'].append(val_metrics['accuracy'])
+            self.history['val_f1'].append(val_metrics['f1'])
+            self.history['learning_rate'].append(self.optimizer.param_groups[0]['lr'])
+
             # Check for best model
             is_best = val_metrics['accuracy'] > self.best_val_acc
             if is_best:
@@ -396,6 +506,9 @@ class Trainer:
                     break
 
         print(f"\nTraining completed! Best validation accuracy: {self.best_val_acc:.4f}")
+
+        # Plot training history
+        self._plot_training_history()
 
         if self.writer is not None:
             self.writer.close()

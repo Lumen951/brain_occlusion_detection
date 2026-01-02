@@ -69,3 +69,5 @@ htmlcov/
 # Misc
 *.log
 .env
+
+data/
