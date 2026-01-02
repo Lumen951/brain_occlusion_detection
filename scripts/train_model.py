@@ -2,8 +2,14 @@
 
 import os
 import random
+import sys
 from pathlib import Path
 from typing import Dict, Any
+
+# Add project root to path BEFORE importing src modules
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
+
 import yaml
 import numpy as np
 import torch
@@ -516,12 +522,6 @@ class Trainer:
 
 if __name__ == "__main__":
     import argparse
-    from pathlib import Path
-    import sys
-
-    # Add project root to path
-    project_root = Path(__file__).parent.parent
-    sys.path.insert(0, str(project_root))
 
     parser = argparse.ArgumentParser(description="Train model on occluded aircraft classification")
     parser.add_argument(
