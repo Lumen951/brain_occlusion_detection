@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 
 # Setup project root
-project_root = Path(__file__).parent.parent
+project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 import torch
@@ -334,7 +334,7 @@ def main():
     parser.add_argument(
         '--checkpoint',
         type=str,
-        default='scripts/experiments/vit_b16/quick_test/checkpoints/best_model.pth',
+        default='experiments/vit_b16/quick_test/checkpoints/best_model.pth',
         help='Path to ViT checkpoint'
     )
     parser.add_argument(
@@ -346,7 +346,7 @@ def main():
     parser.add_argument(
         '--output-dir',
         type=str,
-        default='scripts/experiments/analysis/attention',
+        default='experiments/analysis/attention',
         help='Output directory for attention visualizations'
     )
     parser.add_argument(
@@ -369,7 +369,7 @@ def main():
     parser.add_argument(
         '--error-csv',
         type=str,
-        default='scripts/experiments/analysis/error_analysis/error_samples.csv',
+        default='experiments/analysis/error_analysis/error_samples.csv',
         help='Path to error analysis CSV'
     )
     args = parser.parse_args()

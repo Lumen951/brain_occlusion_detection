@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 
 # Setup project root
-project_root = Path(__file__).parent.parent
+project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 import torch
@@ -16,7 +16,7 @@ from torch.utils.data import DataLoader
 from sklearn.metrics import confusion_matrix
 
 from src.data.stimulus_dataset import OccludedAircraftDataset, get_default_transforms
-from src.models.pretrained_loader import create_vit_b16_pretrained, create_resnet50_pretrained
+from src.models.pretrained_loader import create_vit_b16_pretrained, create_resnet50_pretrained, create_mae_vit_base_pretrained
 
 
 class ErrorAnalyzer:
@@ -78,6 +78,8 @@ class ErrorAnalyzer:
             model = create_vit_b16_pretrained(num_classes=2, pretrained=False)
         elif model_type == 'resnet50':
             model = create_resnet50_pretrained(num_classes=2, pretrained=False)
+        elif model_type == 'mae_vit_base':
+            model = create_mae_vit_base_pretrained(num_classes=2, pretrained=False)
         else:
             raise ValueError(f"Unknown model type: {model_type}")
 
@@ -302,19 +304,19 @@ def main():
     parser.add_argument(
         '--vit-checkpoint',
         type=str,
-        default='scripts/experiments/vit_b16/quick_test/checkpoints/best_model.pth',
+        default='experiments/vit_b16/quick_test/checkpoints/best_model.pth',
         help='Path to ViT checkpoint'
     )
     parser.add_argument(
         '--resnet-checkpoint',
         type=str,
-        default='scripts/experiments/resnet50/quick_test/checkpoints/best_model.pth',
+        default='experiments/resnet50/quick_test/checkpoints/best_model.pth',
         help='Path to ResNet checkpoint'
     )
     parser.add_argument(
         '--output-dir',
         type=str,
-        default='scripts/experiments/analysis/error_analysis',
+        default='experiments/analysis/error_analysis',
         help='Output directory for analysis results'
     )
     args = parser.parse_args()

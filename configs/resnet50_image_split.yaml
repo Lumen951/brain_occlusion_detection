@@ -24,6 +24,8 @@ model:
   num_classes: 2
   pretrained: true        # Use ImageNet pretrained weights
   freeze_backbone: true   # ← CHANGED: Only train final FC layer (25.6M → 0.002M params)
+  drop_rate: 0.5          # ← ADDED: Dropout on classification head
+  drop_block_rate: 0.2    # ← ADDED: DropBlock regularization for CNN layers
 
 # Training Configuration - Enhanced regularization
 training:

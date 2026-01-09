@@ -1,0 +1,73 @@
+# MAE ViT-B/16 Stage 3: Full Fine-tuning
+# Unfreeze entire model for end-to-end optimization
+
+experiment:
+  name: "mae_vit_base_stage3_full_finetuned"
+  description: "Stage 3: MAE ViT-B/16 fully unfrozen for end-to-end fine-tuning"
+  phase: "phase1_baseline"
+  stage: 3
+
+# Dataset Configuration - Image Split Mode
+dataset:
+  type: "image_split"
+  train_dir: "data/train"
+  val_dir: "data/val"
+  test_dir: "data/test"
+
+  image_size: 224
+  batch_size: 16
+  num_workers: 4
+
+# Model Configuration - MAE ViT-B/16
+# Fully unfrozen model
+model:
+  type: "mae_vit_base"
+  num_classes: 2
+  pretrained: true
+  freeze_backbone: false     # Fully unfrozen
+  freeze_layers: []          # No layers frozen
+  drop_rate: 0.3
+  drop_path_rate: 0.1
+
+# Training Configuration - Stage 3
+# Goal: End-to-end optimization for occlusion-robust representations
+training:
+  epochs: 30                 # Longest training for full model
+
+  optimizer:
+    type: "adamw"
+    lr: 1.0e-5               # Very low LR to avoid catastrophic forgetting
+    weight_decay: 0.2        # Strong regularization
+    betas: [0.9, 0.999]
+
+  scheduler:
+    type: "cosine"
+    warmup_epochs: 5         # Longer warmup for stability
+    min_lr: 1.0e-7
+
+  loss: "cross_entropy"
+
+  use_amp: true
+  grad_clip: 1.0
+
+  early_stopping:
+    enabled: true
+    patience: 15             # More patience for full model
+    min_delta: 0.001
+
+  checkpoint:
+    save_dir: "experiments/mae_vit_base/stage3/checkpoints"
+    save_best: true
+    save_last: true
+    save_frequency: 5
+    load_from: "experiments/mae_vit_base/stage2/checkpoints/best_model.pth"  # Load from Stage 2
+    load_training_state: false  # Fresh optimizer with new LR
+
+# Logging Configuration
+logging:
+  use_tensorboard: true
+  log_dir: "experiments/mae_vit_base/stage3/logs"
+  print_freq: 10
+
+# Reproducibility
+seed: 42

@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Dict, Any
 
 # Add project root to path BEFORE importing src modules
-project_root = Path(__file__).parent.parent
+project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 import yaml
@@ -30,6 +30,7 @@ from src.models.vit_model import (
 from src.models.pretrained_loader import (
     create_vit_b16_pretrained,
     create_resnet50_pretrained,
+    create_mae_vit_base_pretrained,
 )
 
 
@@ -55,6 +56,9 @@ class Trainer:
         self.model = self._create_model()
         self.model = self.model.to(self.device)
         print(f"Model parameters: {sum(p.numel() for p in self.model.parameters()) / 1e6:.2f}M")
+
+        # Load checkpoint if specified (before creating optimizer)
+        self._load_checkpoint_if_specified()
 
         # Setup optimizer and scheduler
         self.optimizer = self._create_optimizer()
@@ -154,12 +158,36 @@ class Trainer:
         elif model_type == 'resnet50':
             pretrained = model_config.get('pretrained', False)
             freeze_backbone = model_config.get('freeze_backbone', False)
+            drop_rate = model_config.get('drop_rate', 0.0)
+            drop_block_rate = model_config.get('drop_block_rate', 0.0)
 
             print(f"Creating ResNet-50 (pretrained={pretrained}, freeze={freeze_backbone})")
             return create_resnet50_pretrained(
                 num_classes=num_classes,
                 pretrained=pretrained,
                 freeze_backbone=freeze_backbone,
+                drop_rate=drop_rate,
+                drop_block_rate=drop_block_rate,
+            )
+
+        elif model_type == 'mae_vit_base':
+            pretrained = model_config.get('pretrained', False)
+            freeze_backbone = model_config.get('freeze_backbone', False)
+            freeze_layers = model_config.get('freeze_layers', None)
+            drop_rate = model_config.get('drop_rate', 0.0)
+            drop_path_rate = model_config.get('drop_path_rate', 0.0)
+
+            print(f"Creating MAE ViT-B/16 (pretrained={pretrained}, freeze={freeze_backbone})")
+            if freeze_layers:
+                print(f"  Freeze layers: {freeze_layers}")
+
+            return create_mae_vit_base_pretrained(
+                num_classes=num_classes,
+                pretrained=pretrained,
+                freeze_backbone=freeze_backbone,
+                freeze_layers=freeze_layers,
+                drop_rate=drop_rate,
+                drop_path_rate=drop_path_rate,
             )
 
         # Legacy: Custom ViT models (backward compatible)
@@ -235,6 +263,48 @@ class Trainer:
             return None
         else:
             raise ValueError(f"Unknown scheduler: {sched_type}")
+
+    def _load_checkpoint_if_specified(self):
+        """Load model checkpoint if specified in config."""
+        checkpoint_config = self.config['training'].get('checkpoint', {})
+        load_from = checkpoint_config.get('load_from', None)
+
+        if load_from is None:
+            print("No checkpoint specified, training from scratch")
+            return
+
+        load_from = Path(load_from)
+        if not load_from.exists():
+            print(f"[WARNING] Checkpoint not found: {load_from}")
+            print("Training from scratch instead")
+            return
+
+        print(f"Loading checkpoint from: {load_from}")
+        checkpoint = torch.load(load_from, map_location=self.device)
+
+        # Load model state
+        if 'model_state_dict' in checkpoint:
+            self.model.load_state_dict(checkpoint['model_state_dict'])
+            print("  ✓ Loaded model weights")
+        else:
+            # Fallback: checkpoint might be just the state_dict
+            self.model.load_state_dict(checkpoint)
+            print("  ✓ Loaded model weights (direct state_dict)")
+
+        # Optional: Load training state
+        # Note: For multi-stage training, we typically DON'T load optimizer/scheduler
+        # because learning rates and strategies change between stages
+        load_training_state = checkpoint_config.get('load_training_state', False)
+
+        if load_training_state and 'optimizer_state_dict' in checkpoint:
+            print("  [INFO] Skipping optimizer/scheduler state (multi-stage training)")
+            print("  [INFO] Will use fresh optimizer with new learning rate")
+
+        if 'epoch' in checkpoint:
+            print(f"  ℹ Checkpoint was saved at epoch {checkpoint['epoch']}")
+
+        if 'best_val_acc' in checkpoint:
+            print(f"  ℹ Best validation accuracy: {checkpoint['best_val_acc']:.4f}")
 
     def _create_criterion(self) -> nn.Module:
         """Create loss function."""

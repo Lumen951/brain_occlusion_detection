@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 
 # Setup project root and paths
-project_root = Path(__file__).parent.parent
+project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 import torch
@@ -14,7 +14,7 @@ from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 
 from torch.utils.data import DataLoader
 from src.data.stimulus_dataset import OccludedAircraftDataset, get_default_transforms
-from src.models.pretrained_loader import create_vit_b16_pretrained
+from src.models.pretrained_loader import create_vit_b16_pretrained, create_resnet50_pretrained, create_mae_vit_base_pretrained
 
 
 def evaluate_by_occlusion(checkpoint_path: str, config_path: str):
@@ -30,8 +30,29 @@ def evaluate_by_occlusion(checkpoint_path: str, config_path: str):
         config_path = project_root / config_path
 
     # Load config
-    with open(config_path) as f:
+    with open(config_path, 'r', encoding='utf-8') as f:
         config = yaml.safe_load(f)
+
+    # Determine model type from config
+    model_type = config.get('model', {}).get('type', 'vit_b16')
+
+    # Load model
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    if model_type == 'resnet50':
+        print(f"Creating ResNet-50 model...")
+        model = create_resnet50_pretrained(num_classes=2, pretrained=False)
+    elif model_type == 'mae_vit_base':
+        print(f"Creating MAE ViT-B/16 model...")
+        model = create_mae_vit_base_pretrained(num_classes=2, pretrained=False)
+    else:
+        print(f"Creating ViT-B/16 model...")
+        model = create_vit_b16_pretrained(num_classes=2, pretrained=False)
+
+    checkpoint = torch.load(checkpoint_path, map_location=device)
+    model.load_state_dict(checkpoint['model_state_dict'])
+    model = model.to(device)
+    model.eval()
 
     # Create test dataset directly
     test_dataset = OccludedAircraftDataset(
@@ -47,15 +68,6 @@ def evaluate_by_occlusion(checkpoint_path: str, config_path: str):
         shuffle=False,
         num_workers=4,
     )
-
-    # Load model
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model = create_vit_b16_pretrained(num_classes=2, pretrained=False)
-
-    checkpoint = torch.load(checkpoint_path, map_location=device)
-    model.load_state_dict(checkpoint['model_state_dict'])
-    model = model.to(device)
-    model.eval()
 
     # Collect predictions
     all_preds = []
@@ -154,7 +166,7 @@ if __name__ == "__main__":
     parser.add_argument(
         '--checkpoint',
         type=str,
-        default='scripts/experiments/vit_b16/quick_test/checkpoints/best_model.pth',
+        default='experiments/vit_b16/quick_test/checkpoints/best_model.pth',
         help='Path to model checkpoint (relative to project root)'
     )
     parser.add_argument(

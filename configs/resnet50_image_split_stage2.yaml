@@ -1,0 +1,69 @@
+# ResNet-50 Stage 2: Full Finetuning Configuration
+# Load from Stage 1 checkpoint and train ALL parameters (backbone + classifier)
+
+experiment:
+  name: "resnet50_image_split_stage2"
+  description: "ResNet-50 Stage 2: Full finetuning after Stage 1 warm-up"
+  phase: "phase1_baseline"
+
+# Dataset Configuration - Same as Stage 1
+dataset:
+  type: "image_split"
+  train_dir: "data/train"
+  val_dir: "data/val"
+  test_dir: "data/test"
+
+  image_size: 224
+  batch_size: 16
+  num_workers: 4
+
+# Model Configuration - FULL TRAINING (all 25.6M parameters)
+model:
+  type: "resnet50"
+  num_classes: 2
+  pretrained: true          # Still set to true for model architecture, but weights will be overridden by checkpoint
+  freeze_backbone: false    # ← KEY: Train ALL parameters (25.6M params)
+  drop_rate: 0.3            # ← REDUCED from 0.5: Lower dropout since model has more capacity
+  drop_block_rate: 0.1      # ← REDUCED from 0.2: Less aggressive regularization
+
+# Training Configuration - Full Finetuning
+training:
+  epochs: 80                # ← INCREASED: More epochs for full training
+
+  optimizer:
+    type: "adamw"
+    lr: 5.0e-5              # ← ADJUSTED: Higher than Stage 1 (3e-5) but conservative for finetuning
+    weight_decay: 0.05      # ← REDUCED: From 0.2 to standard 0.05
+    betas: [0.9, 0.999]
+
+  scheduler:
+    type: "cosine"
+    warmup_epochs: 10       # ← INCREASED: Longer warmup for stability when unfreezing
+    min_lr: 1.0e-6
+
+  loss: "cross_entropy"
+
+  use_amp: true             # Mixed precision training (saves memory)
+  grad_clip: 1.0
+
+  early_stopping:
+    enabled: true
+    patience: 20            # ← INCREASED: More patience for full training
+    min_delta: 0.001
+
+  # Checkpoint Configuration - Load from Stage 1
+  checkpoint:
+    load_from: "experiments/resnet50/image_split/checkpoints/best_model.pth"  # ← Load Stage 1 weights
+    save_dir: "experiments/resnet50/image_split_stage2/checkpoints"          # ← Save to new directory
+    save_best: true
+    save_last: true
+    save_frequency: 10
+
+# Logging Configuration
+logging:
+  use_tensorboard: true
+  log_dir: "experiments/resnet50/image_split_stage2/logs"  # ← Separate logs from Stage 1
+  print_freq: 10
+
+# Reproducibility
+seed: 42

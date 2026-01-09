@@ -71,3 +71,5 @@ htmlcov/
 .env
 
 data/
+
+.claude/skills/*

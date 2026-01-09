@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 
 # Setup project root
-project_root = Path(__file__).parent.parent
+project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 import pandas as pd
@@ -418,13 +418,13 @@ def main():
     parser.add_argument(
         '--vit-results',
         type=str,
-        default='scripts/experiments/vit_b16/quick_test/metrics/performance_by_occlusion.csv',
+        default='experiments/vit_b16/quick_test/metrics/performance_by_occlusion.csv',
         help='Path to ViT results CSV'
     )
     parser.add_argument(
         '--resnet-results',
         type=str,
-        default='scripts/experiments/resnet50/quick_test/metrics/performance_by_occlusion.csv',
+        default='experiments/resnet50/quick_test/metrics/performance_by_occlusion.csv',
         help='Path to ResNet results CSV'
     )
     parser.add_argument(
@@ -436,7 +436,7 @@ def main():
     parser.add_argument(
         '--output-dir',
         type=str,
-        default='scripts/experiments/analysis/comparison',
+        default='experiments/analysis/comparison',
         help='Output directory for plots'
     )
     args = parser.parse_args()
