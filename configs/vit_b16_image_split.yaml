@@ -1,0 +1,69 @@
+# ViT-B/16 Configuration - Image-Based Split
+# Uses train/val/test split by images (not by subjects)
+
+experiment:
+  name: "vit_b16_image_split"
+  description: "ViT-B/16 with image-based train/val/test split for true generalization test"
+  phase: "phase1_baseline"
+
+# Dataset Configuration - Image Split Mode
+dataset:
+  type: "image_split"  # New mode: load from data/train, data/val, data/test
+  train_dir: "data/train"
+  val_dir: "data/val"
+  test_dir: "data/test"
+
+  image_size: 224
+  batch_size: 16
+  num_workers: 4
+
+# Model Configuration - ViT-B/16
+# Experiment: Freeze backbone to prevent overfitting on small dataset
+model:
+  type: "vit_b16"
+  num_classes: 2
+  pretrained: true        # Use ImageNet pretrained weights
+  freeze_backbone: true   # ← CHANGED: Only train classification head (86M → 1.5K params)
+  drop_rate: 0.5          # ← ADDED: High dropout on classification head
+  drop_path_rate: 0.1     # Stochastic depth (not used when frozen)
+
+# Training Configuration - Full 50 epochs
+# Enhanced regularization to combat overfitting on small dataset (210 images)
+training:
+  epochs: 50
+
+  optimizer:
+    type: "adamw"
+    lr: 3.0e-5          # ← REDUCED: From 1e-4 to 3e-5 (slower, more stable)
+    weight_decay: 0.2   # ← INCREASED: From 0.05 to 0.2 (stronger L2 regularization)
+    betas: [0.9, 0.999]
+
+  scheduler:
+    type: "cosine"
+    warmup_epochs: 5
+    min_lr: 1.0e-6
+
+  loss: "cross_entropy"
+
+  use_amp: true
+  grad_clip: 1.0
+
+  early_stopping:
+    enabled: true
+    patience: 10        # ← REDUCED: From 15 to 10 (stop earlier if not improving)
+    min_delta: 0.001
+
+  checkpoint:
+    save_dir: "experiments/vit_b16/image_split/checkpoints"
+    save_best: true
+    save_last: true
+    save_frequency: 10
+
+# Logging Configuration
+logging:
+  use_tensorboard: true
+  log_dir: "experiments/vit_b16/image_split/logs"
+  print_freq: 10
+
+# Reproducibility
+seed: 42

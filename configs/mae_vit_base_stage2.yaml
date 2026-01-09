@@ -1,0 +1,73 @@
+# MAE ViT-B/16 Stage 2: Partial Unfreezing
+# Unfreeze last 3 transformer blocks to adapt high-level features
+
+experiment:
+  name: "mae_vit_base_stage2_partial_unfrozen"
+  description: "Stage 2: MAE ViT-B/16 with last 3 blocks unfrozen (blocks 9-11)"
+  phase: "phase1_baseline"
+  stage: 2
+
+# Dataset Configuration - Image Split Mode
+dataset:
+  type: "image_split"
+  train_dir: "data/train"
+  val_dir: "data/val"
+  test_dir: "data/test"
+
+  image_size: 224
+  batch_size: 16
+  num_workers: 4
+
+# Model Configuration - MAE ViT-B/16
+# Freeze first 9 blocks (0-8), unfreeze last 3 blocks (9-11) + head
+model:
+  type: "mae_vit_base"
+  num_classes: 2
+  pretrained: true
+  freeze_backbone: false     # Not freezing entire backbone
+  freeze_layers: [0, 1, 2, 3, 4, 5, 6, 7, 8]  # Freeze first 9 blocks
+  drop_rate: 0.3
+  drop_path_rate: 0.1
+
+# Training Configuration - Stage 2 (FIXED: Higher LR to prevent mode collapse)
+# Goal: Adapt high-level semantic features for occlusion-specific patterns
+training:
+  epochs: 20                 # More epochs for fine-tuning
+
+  optimizer:
+    type: "adamw"
+    lr: 1.0e-4               # ← INCREASED from 3e-5 to prevent mode collapse
+    weight_decay: 0.1        # ← REDUCED from 0.15 to allow more learning
+    betas: [0.9, 0.999]
+
+  scheduler:
+    type: "cosine"
+    warmup_epochs: 5         # ← INCREASED from 3 for more stable warmup
+    min_lr: 1.0e-6
+
+  loss: "cross_entropy"
+
+  use_amp: true
+  grad_clip: 1.0
+
+  early_stopping:
+    enabled: true
+    patience: 10
+    min_delta: 0.001
+
+  checkpoint:
+    save_dir: "experiments/mae_vit_base/stage2/checkpoints"
+    save_best: true
+    save_last: true
+    save_frequency: 5
+    load_from: "experiments/mae_vit_base/stage1/checkpoints/best_model.pth"  # Load from Stage 1
+    load_training_state: false  # Don't load optimizer (different LR)
+
+# Logging Configuration
+logging:
+  use_tensorboard: true
+  log_dir: "experiments/mae_vit_base/stage2/logs"
+  print_freq: 10
+
+# Reproducibility
+seed: 42

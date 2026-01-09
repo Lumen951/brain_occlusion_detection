@@ -69,3 +69,7 @@ htmlcov/
 # Misc
 *.log
 .env
+
+data/
+
+.claude/skills/*

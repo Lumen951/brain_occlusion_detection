@@ -2,8 +2,14 @@
 
 import os
 import random
+import sys
 from pathlib import Path
 from typing import Dict, Any
+
+# Add project root to path BEFORE importing src modules
+project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(project_root))
+
 import yaml
 import numpy as np
 import torch
@@ -14,6 +20,7 @@ from tqdm import tqdm
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support, confusion_matrix
 
 from src.data.stimulus_dataset import create_dataloaders
+from src.data.image_dataset import create_image_split_dataloaders
 from src.models.vit_model import (
     create_vit_tiny,
     create_vit_small,
@@ -23,6 +30,7 @@ from src.models.vit_model import (
 from src.models.pretrained_loader import (
     create_vit_b16_pretrained,
     create_resnet50_pretrained,
+    create_mae_vit_base_pretrained,
 )
 
 
@@ -31,7 +39,7 @@ class Trainer:
 
     def __init__(self, config_path: str):
         """Initialize trainer with configuration."""
-        with open(config_path, 'r') as f:
+        with open(config_path, 'r', encoding='utf-8') as f:
             self.config = yaml.safe_load(f)
 
         # Set random seeds for reproducibility
@@ -48,6 +56,9 @@ class Trainer:
         self.model = self._create_model()
         self.model = self.model.to(self.device)
         print(f"Model parameters: {sum(p.numel() for p in self.model.parameters()) / 1e6:.2f}M")
+
+        # Load checkpoint if specified (before creating optimizer)
+        self._load_checkpoint_if_specified()
 
         # Setup optimizer and scheduler
         self.optimizer = self._create_optimizer()
@@ -68,6 +79,17 @@ class Trainer:
         self.best_val_acc = 0.0
         self.early_stop_counter = 0
 
+        # Training history tracking
+        self.history = {
+            'epoch': [],
+            'train_loss': [],
+            'train_acc': [],
+            'val_loss': [],
+            'val_acc': [],
+            'val_f1': [],
+            'learning_rate': []
+        }
+
         # Setup AMP
         self.use_amp = self.config['training'].get('use_amp', False)
         self.scaler = torch.cuda.amp.GradScaler() if self.use_amp else None
@@ -84,16 +106,32 @@ class Trainer:
     def _create_dataloaders(self) -> Dict[str, torch.utils.data.DataLoader]:
         """Create train/val/test dataloaders."""
         dataset_config = self.config['dataset']
-        return create_dataloaders(
-            dataset_root=dataset_config['root'],
-            train_subjects=dataset_config['train_subjects'],
-            val_subjects=dataset_config['val_subjects'],
-            test_subjects=dataset_config.get('test_subjects'),
-            batch_size=dataset_config['batch_size'],
-            img_size=dataset_config['image_size'],
-            num_workers=dataset_config['num_workers'],
-            occlusion_levels=dataset_config.get('occlusion_levels'),
-        )
+        dataset_type = dataset_config.get('type', 'subject_split')
+
+        if dataset_type == 'image_split':
+            # New mode: load from data/train, data/val, data/test
+            print("Using image-based split mode")
+            return create_image_split_dataloaders(
+                train_dir=dataset_config['train_dir'],
+                val_dir=dataset_config['val_dir'],
+                test_dir=dataset_config.get('test_dir'),
+                batch_size=dataset_config['batch_size'],
+                img_size=dataset_config['image_size'],
+                num_workers=dataset_config['num_workers'],
+            )
+        else:
+            # Original mode: load by subject IDs
+            print("Using subject-based split mode")
+            return create_dataloaders(
+                dataset_root=dataset_config['root'],
+                train_subjects=dataset_config['train_subjects'],
+                val_subjects=dataset_config['val_subjects'],
+                test_subjects=dataset_config.get('test_subjects'),
+                batch_size=dataset_config['batch_size'],
+                img_size=dataset_config['image_size'],
+                num_workers=dataset_config['num_workers'],
+                occlusion_levels=dataset_config.get('occlusion_levels'),
+            )
 
     def _create_model(self) -> nn.Module:
         """Create model (either pretrained from timm or custom ViT)."""
@@ -120,12 +158,36 @@ class Trainer:
         elif model_type == 'resnet50':
             pretrained = model_config.get('pretrained', False)
             freeze_backbone = model_config.get('freeze_backbone', False)
+            drop_rate = model_config.get('drop_rate', 0.0)
+            drop_block_rate = model_config.get('drop_block_rate', 0.0)
 
             print(f"Creating ResNet-50 (pretrained={pretrained}, freeze={freeze_backbone})")
             return create_resnet50_pretrained(
                 num_classes=num_classes,
                 pretrained=pretrained,
                 freeze_backbone=freeze_backbone,
+                drop_rate=drop_rate,
+                drop_block_rate=drop_block_rate,
+            )
+
+        elif model_type == 'mae_vit_base':
+            pretrained = model_config.get('pretrained', False)
+            freeze_backbone = model_config.get('freeze_backbone', False)
+            freeze_layers = model_config.get('freeze_layers', None)
+            drop_rate = model_config.get('drop_rate', 0.0)
+            drop_path_rate = model_config.get('drop_path_rate', 0.0)
+
+            print(f"Creating MAE ViT-B/16 (pretrained={pretrained}, freeze={freeze_backbone})")
+            if freeze_layers:
+                print(f"  Freeze layers: {freeze_layers}")
+
+            return create_mae_vit_base_pretrained(
+                num_classes=num_classes,
+                pretrained=pretrained,
+                freeze_backbone=freeze_backbone,
+                freeze_layers=freeze_layers,
+                drop_rate=drop_rate,
+                drop_path_rate=drop_path_rate,
             )
 
         # Legacy: Custom ViT models (backward compatible)
@@ -201,6 +263,48 @@ class Trainer:
             return None
         else:
             raise ValueError(f"Unknown scheduler: {sched_type}")
+
+    def _load_checkpoint_if_specified(self):
+        """Load model checkpoint if specified in config."""
+        checkpoint_config = self.config['training'].get('checkpoint', {})
+        load_from = checkpoint_config.get('load_from', None)
+
+        if load_from is None:
+            print("No checkpoint specified, training from scratch")
+            return
+
+        load_from = Path(load_from)
+        if not load_from.exists():
+            print(f"[WARNING] Checkpoint not found: {load_from}")
+            print("Training from scratch instead")
+            return
+
+        print(f"Loading checkpoint from: {load_from}")
+        checkpoint = torch.load(load_from, map_location=self.device)
+
+        # Load model state
+        if 'model_state_dict' in checkpoint:
+            self.model.load_state_dict(checkpoint['model_state_dict'])
+            print("  ✓ Loaded model weights")
+        else:
+            # Fallback: checkpoint might be just the state_dict
+            self.model.load_state_dict(checkpoint)
+            print("  ✓ Loaded model weights (direct state_dict)")
+
+        # Optional: Load training state
+        # Note: For multi-stage training, we typically DON'T load optimizer/scheduler
+        # because learning rates and strategies change between stages
+        load_training_state = checkpoint_config.get('load_training_state', False)
+
+        if load_training_state and 'optimizer_state_dict' in checkpoint:
+            print("  [INFO] Skipping optimizer/scheduler state (multi-stage training)")
+            print("  [INFO] Will use fresh optimizer with new learning rate")
+
+        if 'epoch' in checkpoint:
+            print(f"  ℹ Checkpoint was saved at epoch {checkpoint['epoch']}")
+
+        if 'best_val_acc' in checkpoint:
+            print(f"  ℹ Best validation accuracy: {checkpoint['best_val_acc']:.4f}")
 
     def _create_criterion(self) -> nn.Module:
         """Create loss function."""
@@ -345,6 +449,79 @@ class Trainer:
             epoch_path = save_dir / f'checkpoint_epoch_{self.current_epoch}.pth'
             torch.save(checkpoint, epoch_path)
 
+    def _plot_training_history(self):
+        """Plot training history and save to file."""
+        import matplotlib.pyplot as plt
+        import pandas as pd
+
+        if len(self.history['epoch']) == 0:
+            print("No training history to plot")
+            return
+
+        # Determine save directory
+        checkpoint_config = self.config['training']['checkpoint']
+        save_dir = Path(checkpoint_config['save_dir']).parent  # Go up one level from checkpoints/
+        save_dir.mkdir(parents=True, exist_ok=True)
+
+        # Create figure with 4 subplots
+        fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+        fig.suptitle(f"Training History - {self.config['experiment']['name']}", fontsize=16)
+
+        epochs = self.history['epoch']
+
+        # Plot 1: Loss
+        ax = axes[0, 0]
+        ax.plot(epochs, self.history['train_loss'], 'b-', label='Train Loss', linewidth=2)
+        ax.plot(epochs, self.history['val_loss'], 'r-', label='Val Loss', linewidth=2)
+        ax.set_xlabel('Epoch')
+        ax.set_ylabel('Loss')
+        ax.set_title('Training and Validation Loss')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+
+        # Plot 2: Accuracy
+        ax = axes[0, 1]
+        ax.plot(epochs, self.history['train_acc'], 'b-', label='Train Acc', linewidth=2)
+        ax.plot(epochs, self.history['val_acc'], 'r-', label='Val Acc', linewidth=2)
+        ax.set_xlabel('Epoch')
+        ax.set_ylabel('Accuracy')
+        ax.set_title('Training and Validation Accuracy')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+
+        # Plot 3: F1 Score
+        ax = axes[1, 0]
+        ax.plot(epochs, self.history['val_f1'], 'g-', label='Val F1', linewidth=2)
+        ax.set_xlabel('Epoch')
+        ax.set_ylabel('F1 Score')
+        ax.set_title('Validation F1 Score')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+
+        # Plot 4: Learning Rate
+        ax = axes[1, 1]
+        ax.plot(epochs, self.history['learning_rate'], 'purple', label='Learning Rate', linewidth=2)
+        ax.set_xlabel('Epoch')
+        ax.set_ylabel('Learning Rate')
+        ax.set_title('Learning Rate Schedule')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        ax.set_yscale('log')
+
+        plt.tight_layout()
+
+        # Save figure
+        plot_path = save_dir / 'training_history.png'
+        plt.savefig(plot_path, dpi=150, bbox_inches='tight')
+        print(f"Saved training history plot to {plot_path}")
+        plt.close()
+
+        # Save CSV
+        df = pd.DataFrame(self.history)
+        csv_path = save_dir / 'training_history.csv'
+        df.to_csv(csv_path, index=False)
+        print(f"Saved training history CSV to {csv_path}")
+
     def train(self):
         """Main training loop."""
         epochs = self.config['training']['epochs']
@@ -373,6 +550,15 @@ class Trainer:
                 self.writer.add_scalar('Val/F1', val_metrics['f1'], epoch)
                 self.writer.add_scalar('LR', self.optimizer.param_groups[0]['lr'], epoch)
 
+            # Record history
+            self.history['epoch'].append(self.current_epoch)
+            self.history['train_loss'].append(train_metrics['loss'])
+            self.history['train_acc'].append(train_metrics['accuracy'])
+            self.history['val_loss'].append(val_metrics['loss'])
+            self.history['val_acc'].append(val_metrics['accuracy'])
+            self.history['val_f1'].append(val_metrics['f1'])
+            self.history['learning_rate'].append(self.optimizer.param_groups[0]['lr'])
+
             # Check for best model
             is_best = val_metrics['accuracy'] > self.best_val_acc
             if is_best:
@@ -397,18 +583,15 @@ class Trainer:
 
         print(f"\nTraining completed! Best validation accuracy: {self.best_val_acc:.4f}")
 
+        # Plot training history
+        self._plot_training_history()
+
         if self.writer is not None:
             self.writer.close()
 
 
 if __name__ == "__main__":
     import argparse
-    from pathlib import Path
-    import sys
-
-    # Add project root to path
-    project_root = Path(__file__).parent.parent
-    sys.path.insert(0, str(project_root))
 
     parser = argparse.ArgumentParser(description="Train model on occluded aircraft classification")
     parser.add_argument(

@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__context7__resolve-library-id",
+      "mcp__context7__query-docs",
+      "Bash(git add:*)",
+      "Bash(ls:*)",
+      "Bash(find:*)",
+      "Bash(for:*)",
+      "Bash(do sed:*)",
+      "Bash(done:*)",
+      "Bash(grep:*)",
+      "Bash(dir /s /b experiments*.json experiments*.txt experiments*.csv)",
+      "Bash(findstr:*)",
+      "WebSearch",
+      "Skill(google-ai-mode)",
+      "Skill(literature-review)",
+      "Bash(git commit:*)",
+      "Skill(research-lookup)",
+      "Skill(statistical-analysis)",
+      "Skill(exploratory-data-analysis)"
+    ]
+  },
+  "enabledPlugins": {
+    "document-skills-pptx@awesome-claude-skills": true
+  }
+}

@@ -1,0 +1,20 @@
+# Comprehensive Analysis Summary
+Generated: 2026-01-09 22:29:28
+
+## Key Findings
+
+### 1. Human-AI Performance Gap
+- Average ViT gap: 26.84%
+- Average ResNet gap: 33.09%
+- ViT performs 6.25% better than ResNet on average
+
+### 2. Occlusion Level Effects
+- 10%: ViT gap = 45.62%, ResNet gap = 51.87%
+- 70%: ViT gap = 29.28%, ResNet gap = 35.53%
+- 90%: ViT gap = 5.63%, ResNet gap = 11.88%
+
+### 3. Human-AI Agreement
+- All three correct: 6/48 (12.5%)
+- Human correct, AI wrong: 8/48 (16.7%)
+- AI correct, human wrong: 6/48 (12.5%)
+
