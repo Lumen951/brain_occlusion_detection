@@ -1,0 +1,66 @@
+# ResNet-50 Configuration - Augmented Dataset (9900 images)
+# Training with full backbone fine-tuning
+
+experiment:
+  name: "resnet50_augmented"
+  description: "ResNet-50 with 9900 augmented training images, full fine-tuning"
+  phase: "phase1_augmented"
+
+# Dataset Configuration - Augmented Image Split
+dataset:
+  type: "image_split"
+  train_dir: "data/train_augmented"  # 9900 augmented images
+  val_dir: "data/val"                # 300 images
+  test_dir: "data/test"              # 1584 augmented images
+
+  image_size: 224
+  batch_size: 32      # Increased from 16 (more data = larger batch)
+  num_workers: 4
+
+# Model Configuration - ResNet-50 with Full Fine-tuning
+model:
+  type: "resnet50"
+  num_classes: 2
+  pretrained: true        # Use ImageNet pretrained weights
+  freeze_backbone: false  # ← CHANGED: Fine-tune entire network (sufficient data)
+  drop_rate: 0.3          # ← REDUCED: From 0.5 to 0.3 (less aggressive dropout)
+
+# Training Configuration - Optimized for augmented dataset
+training:
+  epochs: 35  # Reduced from 50 (more data = faster convergence)
+
+  optimizer:
+    type: "adamw"
+    lr: 1.0e-4          # ← INCREASED: From 3e-5 to 1e-4 (can use higher LR with more data)
+    weight_decay: 0.05  # ← REDUCED: From 0.2 to 0.05 (less regularization needed)
+    betas: [0.9, 0.999]
+
+  scheduler:
+    type: "cosine"
+    warmup_epochs: 3    # Reduced from 5
+    min_lr: 1.0e-6
+
+  loss: "cross_entropy"
+
+  use_amp: true         # Mixed precision training
+  grad_clip: 1.0
+
+  early_stopping:
+    enabled: true
+    patience: 7         # ← REDUCED: From 10 to 7 (faster convergence expected)
+    min_delta: 0.001
+
+  checkpoint:
+    save_dir: "experiments/resnet50/augmented/checkpoints"
+    save_best: true
+    save_last: true
+    save_frequency: 5   # Save every 5 epochs
+
+# Logging Configuration
+logging:
+  use_tensorboard: true
+  log_dir: "experiments/resnet50/augmented/logs"
+  print_freq: 20  # Print every 20 batches
+
+# Reproducibility
+seed: 42

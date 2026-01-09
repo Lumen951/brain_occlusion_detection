@@ -14,7 +14,14 @@
       "Bash(findstr:*)",
       "WebSearch",
       "Skill(google-ai-mode)",
-      "Skill(literature-review)"
+      "Skill(literature-review)",
+      "Bash(git commit:*)",
+      "Skill(research-lookup)",
+      "Skill(statistical-analysis)",
+      "Skill(exploratory-data-analysis)"
     ]
+  },
+  "enabledPlugins": {
+    "document-skills-pptx@awesome-claude-skills": true
   }
 }
